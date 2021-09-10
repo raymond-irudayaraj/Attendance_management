@@ -3,7 +3,7 @@ Populated logins:
 ID 	1
 erp	20210003441
 pass	Getmein 1
-Type	Teacher
+Type	SuperUser
 --------------------
 ID	2
 erp	20210000100
