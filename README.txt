@@ -46,6 +46,11 @@ METHOD - POST
 http://127.0.0.1:8000/auth/jwt/create/
 body - erp & password
 
+REFRESH THE ACCESS TOKEN:
+METHOD - POST
+http://127.0.0.1:8000/auth/jwt/refresh/
+body - refresh token
+
 MANAGE ROLES: To switch between teacher/student privilages
 METHOD - POST
 http://127.0.0.1:8000/user/manage_role/<erp>/<0 for Teacher | 1 for student>
@@ -53,7 +58,7 @@ http://127.0.0.1:8000/user/manage_role/<erp>/<0 for Teacher | 1 for student>
 SCHEDULE CLASS:
 METHOD - POST
 http://127.0.0.1:8000/onlineclass/schedule/
-body - start_time, end_time, teacher(id to be passed)
+body - start_time(2021-09-10T15:00:00+05:30), end_time(2021-09-10T16:00:00+05:30), teacher(id to be passed)
 
 CHECK ALL SCHEDULED CLASSES:
 METHOD - GET
