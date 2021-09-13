@@ -1,6 +1,6 @@
 from onlineclass.serializers import AttendanceSerializer, ScheduleSerializer
 from django.shortcuts import render
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, response
 from django.db.models.aggregates import Max
 
 from rest_framework.views import APIView
@@ -36,7 +36,8 @@ class OnlineClassSchedule(APIView):
                 return Response(serializer.data,
                                 status=status.HTTP_201_CREATED)
             else:
-                return HttpResponse('Unauthorized: Student cannot schedule a class.', status=401)
+                resp = {'message': 'Unauthorized: Student cannot schedule a class.'}
+                return Response(resp, status=401)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class JoinLog(APIView):
@@ -52,15 +53,18 @@ class JoinLog(APIView):
                 serializer = AttendanceSerializer(Attendancedata, many=True)
                 return Response(serializer.data)
             else:
-                return HttpResponse("No students in the class.")
+                resp = {'message': "No students in the class."}
+                return Response(resp)
         else:
-            return HttpResponse('Unauthorized: Student cannot view the log.', status=401)
+            resp = {'message': 'Unauthorized: Student cannot view the log.'}
+            return Response(resp, status=401)
                 
     def post(self, request, schedule_id, log_status, format=None):
         try: 
             session = Schedule.objects.get(pk = schedule_id)
         except:
-            return HttpResponse("Requested online class doesn't exists.")
+            resp = {'message': "Requested online class doesn't exists."}
+            return Response(resp)
         ctime = utc.localize(datetime.datetime.now()) 
         stime = session.start_time + datetime.timedelta(hours=5, minutes=30)
         etime = session.end_time + datetime.timedelta(hours=5, minutes=30)
@@ -72,19 +76,22 @@ class JoinLog(APIView):
             if not log_status:
                 try:
                     lastactive = Attendance.objects.filter(user = user, classid = schedule_id).order_by('pk').last()
+                    time_delta = (ctime - (lastactive.time + datetime.timedelta(hours=5, minutes=30)))
+                    total_seconds = time_delta.total_seconds()
+                    minutes = total_seconds/60
+                    minutes += int(lastactive.active_time)
                 except:
-                    return HttpResponse(f'Please Join the class before leaving.')
+                    resp = {'message': 'Please Join the class before leaving.'}
+                    return Response(resp)
                 try:
                     if lastactive.type == log_status:
-                        return HttpResponse(f'User already left class. Join again to continue the class')
+                        resp = {'message': 'User already left class. Join again to continue the class'}
+                        return Response(resp)
                 except:
                     pass
                 # print(lastactive.time + datetime.timedelta(hours=5, minutes=30))
                 # print(ctime)
-                time_delta = (ctime - (lastactive.time + datetime.timedelta(hours=5, minutes=30)))
-                total_seconds = time_delta.total_seconds()
-                minutes = total_seconds/60
-                minutes += int(lastactive.active_time)
+                
                 # print('update time', minutes)
                 
                 log = Attendance(user = user, type = log_status, time = time.strftime("%H:%M:%S", time.localtime()), classid = schedule,
@@ -94,25 +101,30 @@ class JoinLog(APIView):
                 if schedule.teacher.pk == request.user.pk:
                     schedule.is_completed = True
                     schedule.save()
-                    return HttpResponse(f'Class completed successfully. Teacher ended the class.')
-
-                return HttpResponse(f'User left the class.')
+                    resp = {'message': 'Class completed successfully. Teacher ended the class.'}
+                    return Response(resp)
+                resp = {'message': 'User left the class.'}
+                return Response(resp)
             else:
                 lastactive = Attendance.objects.filter(user = user, classid = schedule_id).order_by('pk').last()
                 try:
                     if lastactive.type == log_status:
-                        return HttpResponse(f'User already in class.')
+                        resp = {'message': 'User already in class.'}
+                        return Response(resp)
                 except:
                     pass
                 log = Attendance(user = user, type = log_status, time = time.strftime("%H:%M:%S", time.localtime()), classid = schedule)
                 log.save()
-                return HttpResponse(f'Ongoing class by {schedule.teacher.username}')
+                resp = {'message': 'Ongoing class by ' + schedule.teacher.username}
+                return Response(resp)
 
             
         elif ctime < stime:
-            return HttpResponse(f'Class start at {stime}')
+            resp = {'message': 'Class start at ' + stime}
+            return Response(resp)
         else:
-            return HttpResponse(f'Class completed at {etime}')
+            resp = {'message': 'Class completed at ' + etime}
+            return Response(resp)
 
 class ClassLog(APIView):
     """
@@ -124,12 +136,13 @@ class ClassLog(APIView):
         if not request.user.user_type:
             Scheduledata = Schedule.objects.get(pk = schedule_id)
             if not Scheduledata.is_completed:
-                return HttpResponse("It is an ongoing class. Please check after the completion of class.")
+                resp = {'message': 'It is an ongoing class. Please check after the completion of class.'}
+                return Response(resp)
             else:
                 allStudents = User.objects.filter(grade = Scheduledata.teacher.grade, user_type = True)
                 alldict = []
                 for x in allStudents:
-                    alldict.append({'user':x.id, "ActiveMinutes": 0, "Attendance": "Absent"})
+                    alldict.append({'user':x.id, 'first_name': x.first_name, "ActiveMinutes": 0, "Attendance": "Absent"})
                 request_values = Attendance.objects.filter(classid__pk = schedule_id).values('user').annotate(ActiveMinutes=Max('active_time'))
                 for dct in request_values:
                     dct['Attendance'] = 'Present'
@@ -137,8 +150,16 @@ class ClassLog(APIView):
                     cnt = 0
                     for y in alldict:
                         if x['user'] == y['user']:
-                            alldict[0] = x
+                            alldict[0]['user'] = x['user']
+                            alldict[0]['ActiveMinutes'] = x['ActiveMinutes']
+                            alldict[0]['Attendance'] = x['Attendance']
                         cnt += 1
+                classdetails = {'classid': schedule_id, 'teacher':Scheduledata.teacher.first_name, 
+                                'grade': Scheduledata.teacher.grade, 'course': Scheduledata.teacher.course, 
+                                'start_time':Scheduledata.start_time, 'end_time':Scheduledata.end_time, 
+                                'completion_status': Scheduledata.is_completed}
+                alldict.insert(0, classdetails)
                 return Response(alldict)
         else:
-            return HttpResponse('Unauthorized: Student cannot view the statistics.', status=401)
+            resp = {'message': 'Unauthorized: Student cannot view the statistics.'}
+            return Response(resp, status=401)
