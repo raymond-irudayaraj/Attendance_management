@@ -32,6 +32,8 @@ Type	Student
 ********************
 
 ENDPOINTS
+Content-Type: application/x-www-form-urlencoded
+
 
 CREATING USER:
 METHOD - POST
